@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Raytracing</title>
+
+    <style>
+        body {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+
+<script id="vertexShader" type="x-shader/x-vertex">
+    varying vec2 vUv;
+
+    void main() {
+        vUv = uv;
+
+//        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+        gl_Position = vec4( position, 1.0 );
+    }
+</script>
+
+<script id="fragmentShader" type="x-shader/x-fragment">
+    struct Ray {
+        vec3 origin;
+        vec3 dir;
+    };
+
+    struct RayTracingMaterial {
+        vec4 color;
+        vec4 emissionColor;
+        float emissionStrength;
+        float smoothness;
+    };
+
+    struct Sphere {
+        vec3 position;
+        float radius;
+        RayTracingMaterial material;
+    };
+
+    struct Triangle {
+        vec3 posA;
+        vec3 posB;
+        vec3 posC;
+        vec3 normalA;
+        vec3 normalB;
+        vec3 normalC;
+        RayTracingMaterial material;
+    };
+
+    struct HitInfo {
+        bool didHit;
+        float dst;
+        vec3 hitPoint;
+        vec3 normal;
+        RayTracingMaterial material;
+    };
+
+    uniform vec3 ViewParams;
+    uniform vec2 canvasSize;
+    uniform mat4 CamToWorldMatrix;
+
+    uniform Sphere sphereList[16];
+    uniform int sphereNumber;
+
+    uniform Triangle triangleList[64];
+    uniform int triangleNumber;
+
+    uniform int MaxBouceCount;
+
+    uniform sampler2D LastFrame;
+    uniform float NumRenderedFrames;
+    uniform bool accumulateFrames;
+
+    out vec4 fragColor;
+
+    HitInfo RaySphere(Ray ray, vec3 sphereCenter, float sphereRadius) {
+        HitInfo hitInfo;
+        hitInfo.didHit = false;
+        hitInfo.dst = 0.0;
+
+        vec3 offsetRayOrigin = ray.origin - sphereCenter;
+
+        float a = dot(ray.dir, ray.dir);
+        float b = 2.0 * dot(offsetRayOrigin, ray.dir);
+        float c = dot(offsetRayOrigin, offsetRayOrigin) - sphereRadius * sphereRadius;
+
+        float discriminant = b * b - 4.0 * a * c;
+
+        if (discriminant >= 0.0) {
+            float dst = (-b - sqrt(discriminant)) / (2.0 * a);
+
+            if (dst >= 0.0) {
+                hitInfo.didHit = true;
+                hitInfo.dst = dst;
+                hitInfo.hitPoint = ray.origin + ray.dir * dst;
+                hitInfo.normal = normalize(hitInfo.hitPoint - sphereCenter);
+            }
+
+        }
+
+        return hitInfo;
+    }
+
+    HitInfo RayTriangle(Ray ray, Triangle tri) {
+        vec3 edgeAB = tri.posB - tri.posA;
+        vec3 edgeAC = tri.posC - tri.posA;
+        vec3 normalVector = cross(edgeAB, edgeAC);
+        vec3 ao = ray.origin - tri.posA;
+        vec3 dao = cross(ao, ray.dir);
+
+        float determinant = -dot(ray.dir, normalVector);
+        float invDet = 1.0 / determinant;
+
+        float dst = dot(ao, normalVector) * invDet;
+        float u = dot(edgeAC, dao) * invDet;
+        float v = -dot(edgeAB, dao) * invDet;
+        float w = 1.0 - u - v;
+
+        HitInfo hitInfo;
+        hitInfo.didHit = determinant >= 1.0E-6 && dst >= 0.0 && u >= 0.0 && v >= 0.0 && w >= 0.0;
+        hitInfo.hitPoint = ray.origin + ray.dir * dst;
+        hitInfo.normal = normalize(tri.normalA * w + tri.normalB * u + tri.normalC * v);
+        hitInfo.dst = dst;
+
+        return hitInfo;
+    }
+
+    HitInfo CalculateRayCollision(Ray ray) {
+        HitInfo closestHit;
+        closestHit.didHit = false;
+        closestHit.dst = 10000000.0;
+        closestHit.material.color = vec4(0.0, 0.0, 0.0, 1.0);
+
+        for (int i = 0; i < sphereNumber; i++) {
+            Sphere sphere = sphereList[i];
+            HitInfo hitInfo = RaySphere(ray, sphere.position, sphere.radius);
+
+            if(hitInfo.didHit && hitInfo.dst < closestHit.dst) {
+                closestHit = hitInfo;
+                closestHit.material = sphere.material;
+            }
+
+        }
+
+        for (int i = 0; i < triangleNumber; i++) {
+            Triangle tri = triangleList[i];
+            HitInfo hitInfo = RayTriangle(ray, tri);
+
+            if(hitInfo.didHit && hitInfo.dst < closestHit.dst) {
+                closestHit = hitInfo;
+                closestHit.material = tri.material;
+            }
+
+        }
+
+        return closestHit;
+    }
+
+    float RandomValue(inout uint state) {
+        state = state * uint(747796405) + uint(2891336453);
+        uint result = ((state >> ((state >> uint(28)) + uint(4))) ^ state) * uint(277803737);
+        result = (result >> 22) ^ result;
+        return float(result) / 4294967295.0;
+    }
+
+    float RandomValueNormalDistribution(inout uint state) {
+        float theta = 2.0 * 3.1415926 * RandomValue(state);
+        float rho = sqrt(-2.0 * log(RandomValue(state)));
+        return rho * cos(theta);
+    }
+
+    vec3 RandomDirection(inout uint state) {
+        float x = RandomValueNormalDistribution(state);
+        float y = RandomValueNormalDistribution(state);
+        float z = RandomValueNormalDistribution(state);
+        return normalize(vec3(x, y, z));
+    }
+
+    vec3 RandomHemisphereDirection(vec3 normal, inout uint state) {
+        vec3 dir = RandomDirection(state);
+        return dir * sign(dot(normal, dir));
+    }
+
+    vec3 GetEnvironmentLight(Ray ray) {
+
+        vec4 skyColorZenith = vec4(0.3, 0.8, 0.3, 1.0);
+        vec4 skyColorHorizon = vec4(0.8, 0.28, 0.15, 1.0);
+        vec4 groundColor = vec4(0.3, 0.2, 0.2, 1.0);
+
+        vec3 sunDir = vec3(-1.0, -1.0, 0.0);
+        float sunFocus = 1.0;
+        float sunIntensity = 0.0001;
+
+        float skyGradientT = pow(smoothstep(0.0, 0.4, ray.dir.y), 0.35);
+        vec4 skyGradient = mix(skyColorHorizon, skyColorZenith, skyGradientT);
+        float sun = pow(max(0.0, dot(ray.dir, -sunDir)), sunFocus) * sunIntensity;
+
+        float groundToSkyT = smoothstep(-0.1, 0.0, ray.dir.y);
+        float sunMask = float(groundToSkyT >= 1.0);
+        return mix(groundColor.xyz, skyGradient.xyz, groundToSkyT) + sun * 0.5 * sunMask;
+    }
+
+    vec4 Trace(Ray ray, inout uint state) {
+
+        vec4 incomingLight = vec4(0, 0, 0, 1.0);
+        vec4 rayColor = vec4(1.0, 1.0, 1.0, 1.0);
+
+        for (int i = 0; i <= MaxBouceCount; i++) {
+
+            HitInfo hitInfo = CalculateRayCollision(ray);
+            RayTracingMaterial material = hitInfo.material;
+
+            if(hitInfo.didHit) {
+                ray.origin = hitInfo.hitPoint;
+                vec3 diffuseDir = normalize(hitInfo.normal + RandomDirection(state));
+                vec3 specularDir = reflect(ray.dir, hitInfo.normal);
+
+                ray.dir = mix(diffuseDir, specularDir, material.smoothness);
+
+                vec4 emittedLight = material.emissionColor * material.emissionStrength;
+                incomingLight += emittedLight * rayColor;
+                rayColor *= material.color;
+
+            } else {
+//                incomingLight += vec4(GetEnvironmentLight(ray), 1.0) * rayColor * 0.8;
+//                incomingLight += vec4(0.1, 0.1, 0.1, 1.0) * rayColor;
+                break;
+            }
+        }
+
+        return incomingLight;
+    }
+
+    void main() {
+
+        float pixelIndex = gl_FragCoord.y * canvasSize.x + gl_FragCoord.x;
+        uint state = uint(pixelIndex + NumRenderedFrames * 71939.0);
+
+        vec3 viewPointLocal = vec3(gl_FragCoord.x/canvasSize.x - 0.5, gl_FragCoord.y/canvasSize.y - 0.5, 1) * ViewParams;
+        vec4 viewPoint = CamToWorldMatrix * vec4(viewPointLocal, 1);
+
+        Ray ray;
+        ray.origin = cameraPosition;
+        ray.dir = normalize(viewPoint.xyz - ray.origin);
+
+        vec4 finalColor = vec4(0.0, 0.0, 0.0, 1.0);
+        float max = 10.0;
+        for (int rayIndex = 0; rayIndex < int(max); rayIndex++) {
+            state += uint(10);
+            finalColor += Trace(ray, state);
+        }
+
+        finalColor = finalColor / (max / 2.0);
+        finalColor = vec4(finalColor.xyz, 1.0);
+
+        vec4 lastColor = texture2D(LastFrame, gl_FragCoord.xy / canvasSize.xy);
+
+        if(accumulateFrames) {
+            float weight = 1.0 / (NumRenderedFrames + 1.0);
+            finalColor = lastColor * (1.0 - weight) + finalColor * weight;
+            fragColor = vec4(finalColor.xyz, 1.0);
+        } else {
+            fragColor = vec4(finalColor.xyz, 1.0);
+        }
+
+//        float weight = 1.0 / (NumRenderedFrames + 1.0);
+//        finalColor = lastColor * (1.0 - weight) + finalColor * weight;
+
+        fragColor = vec4(finalColor.xyz, 1.0);
+    }
+</script>
+
+<!--<script id="progressiveVShader" type="x-shader/x-vertex">-->
+<!--    varying vec2 vUv;-->
+<!--    void main() {-->
+<!--        vUv = uv;-->
+<!--        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);-->
+<!--    }-->
+<!--</script>-->
+
+<!--<script id="progressiveFShader" type="x-shader/x-fragment">-->
+<!--    uniform sampler2D frameTexture;-->
+<!--    uniform sampler2D tDiffuse;-->
+<!--    varying vec2 vUv;-->
+
+<!--    void main() {-->
+<!--        vec4 o = texture2D(frameTexture, vUv);-->
+<!--        vec4 n = texture2D(tDiffuse, vUv);-->
+<!--        vec3 sum = n.rgb + o.rgb;-->
+<!--        gl_FragColor = vec4(sum / 2.0, 1.0);-->
+<!--    }-->
+
+<!--</script>-->
+
+<script type="module" src="/main.js"></script>
+</body>
+</html>
