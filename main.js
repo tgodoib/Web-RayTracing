@@ -14,7 +14,7 @@ let plane;
 let lastFrameTexture;
 let accumulatedFrameCount;
 const MAX_SPHERES = 16;
-const MAX_TRIANGLES = 64;
+const MAX_TRIANGLES = 90;
 let shader;
 
 let spheres = []
@@ -169,6 +169,8 @@ function addMesh(geo, pos, rot, diffuseColor, emissionColor, emissionStrength, s
     m.rotation.set(rot[0], rot[1], rot[2])
     scene.add(m)
 
+    geo.computeVertexNormals();
+
     let index = geo.getIndex();
     let vertex = geo.getAttribute('position')
     let normal = geo.getAttribute('normal')
@@ -191,21 +193,37 @@ function addMesh(geo, pos, rot, diffuseColor, emissionColor, emissionStrength, s
             vertex.array[3 * index.array[3 * i + 2] + 2]
         ))
 
-        let normalA = m.localToWorld(new Vector3(
+        // let normalA = m.localToWorld(new Vector3(
+        //     normal.array[3 * index.array[3 * i]],
+        //     normal.array[3 * index.array[3 * i] + 1],
+        //     normal.array[3 * index.array[3 * i] + 2]
+        // ))
+        // let normalB = m.localToWorld(new Vector3(
+        //     normal.array[3 * index.array[3 * i + 1]],
+        //     normal.array[3 * index.array[3 * i + 1] + 1],
+        //     normal.array[3 * index.array[3 * i + 1] + 2]
+        // ))
+        // let normalC = m.localToWorld(new Vector3(
+        //     normal.array[3 * index.array[3 * i + 2]],
+        //     normal.array[3 * index.array[3 * i + 2] + 1],
+        //     normal.array[3 * index.array[3 * i + 2] + 2]
+        // ))
+
+        let normalA = new Vector3(
             normal.array[3 * index.array[3 * i]],
             normal.array[3 * index.array[3 * i] + 1],
             normal.array[3 * index.array[3 * i] + 2]
-        ))
-        let normalB = m.localToWorld(new Vector3(
+        )
+        let normalB = new Vector3(
             normal.array[3 * index.array[3 * i + 1]],
             normal.array[3 * index.array[3 * i + 1] + 1],
             normal.array[3 * index.array[3 * i + 1] + 2]
-        ))
-        let normalC = m.localToWorld(new Vector3(
+        )
+        let normalC = new Vector3(
             normal.array[3 * index.array[3 * i + 2]],
             normal.array[3 * index.array[3 * i + 2] + 1],
             normal.array[3 * index.array[3 * i + 2] + 2]
-        ))
+        )
 
         shader.uniforms.triangleList.value[triangles.length] = {
             posA: posA,
@@ -328,43 +346,13 @@ function init() {
 
     createPlane();
 
-    // addMesh(new THREE.BoxGeometry(3.8, 0.2, 4), [0, 2, 0], [0.2, 1, 0.3], [0, 1, 0], 0.5, 0);
-    // addMesh(new THREE.BoxGeometry(3.8, 0.2, 4), [0, -2, 0], [1, 1, 1], [0, 0, 0], 0, 0.9);
-    // addMesh(new THREE.BoxGeometry(0.2, 4.2, 4), [-2, 0, 0], [0.3, 0.2, 1], [0.2, 0.1, 1], 1, 0);
-    // addMesh(new THREE.BoxGeometry(0.2, 4.2, 4), [2, 0, 0], [1, 0.2, 0.3], [1, 0.1, 0.2], 1, 0);
-    // addMesh(new THREE.BoxGeometry(4.2, 4.2, 0.2), [0, 0, -2.1], [1, 1, 1], [1, 1, 1], 0.25, 0);
-    //
-    // addSphere(0.7, [0, 0, 0], [1, 1, 1], [0, 0, 0], 0, 0)
-
-    // addMesh(new THREE.PlaneGeometry(10, 20), [0, 2, 0], [Math.PI / 2, 0, 0], [1, 1, 1], [1, 1, 1], 0, 0.95);
-    // addMesh(new THREE.PlaneGeometry(10, 20), [0, -2, 0], [-Math.PI / 2, 0, 0], [1, 1, 1], [1, 1, 1], 0, 0.95);
-    //
-    // addMesh(new THREE.PlaneGeometry(10, 10), [-4, 0, 0], [0, Math.PI / 2 - 0.1, 0], [1, 0, 0], [1, 0, 0], 1, 0);
-    // addMesh(new THREE.PlaneGeometry(10, 10), [4, 0, 0], [0, -Math.PI / 2 + 0.1, 0], [1, 0, 0], [1, 0, 0], 1, 0);
-    //
-    // addMesh(new THREE.PlaneGeometry(5, 5), [0, 0, 6], [Math.PI, 0, 0], [1, 1, 1], [1, 1, 1], 0.2, 0);
-    //
-    // addSphere(0.7, [0, 0, 0], [1, 1, 1], [0, 0, 0], 0, 0)
-
-    //--
-
-    addMesh(new THREE.PlaneGeometry(5, 5), [0, 2.5, 0], [Math.PI / 2, 0, 0], [1, 1, 1], [0, 0, 0], 0, 0.95);
-    addMesh(new THREE.PlaneGeometry(5 / 2, 5 / 2), [-5 / 4, -2.5, -5 / 4], [-Math.PI / 2, 0, 0], [1, 1, 1], [1, 1, 1], 1, 0);
-    addMesh(new THREE.PlaneGeometry(5 / 2, 5 / 2), [-5 / 4, -2.5, 5 / 4], [-Math.PI / 2, 0, 0], [.1, .1, .1], [0, 0, 0], 0, 0.5);
-    addMesh(new THREE.PlaneGeometry(5 / 2, 5 / 2), [5 / 4, -2.5, -5 / 4], [-Math.PI / 2, 0, 0], [0.1, 0.1, 0.1], [0, 0, 0], 0, 0.5);
-    addMesh(new THREE.PlaneGeometry(5 / 2, 5 / 2), [5 / 4, -2.5, 5 / 4], [-Math.PI / 2, 0, 0], [1, 1, 1], [1, 1, 1], 1, 0);
-
-
-    addMesh(new THREE.PlaneGeometry(5, 5), [-2.5, 0, 0], [0, Math.PI / 2, 0], [1, 1, 1], [0, 0, 0], 0, 0.95);
-    addMesh(new THREE.PlaneGeometry(5, 5), [2.5, 0, 0], [0, -Math.PI / 2, 0], [1, 1, 1], [0, 0, 0], 0, 0.95);
-
-    addMesh(new THREE.PlaneGeometry(5, 5), [0, 0, -2.5], [0, 0, 0], [1, 1, 1], [0, 0, 0], 0, 0.95);
-    addMesh(new THREE.PlaneGeometry(5, 5), [0, 0, 2.5], [Math.PI, 0, 0], [1, 1, 1], [0, 0, 0], 0, 0.95);
-
-    // addSphere(0.7, [0, 0, 0], [1, 0, 0], [0, 0, 0], 0, 0)
-
-    addMesh(createHeartGeo(), [0, -1.5, 0], [0, 0, 0], [1, 0, 0], [0, 0, 0], 0, 0.95);
-
+    addMesh(createHeartGeo(), [0, -1.5, 0], [0, 0, 0], [1, 1, 1], [0, 0, 0], 0, 0);
+    addMesh(new THREE.BoxGeometry(3.8, 0.2, 4), [0, 2, 0], [0, 0, 0], [0.95, 1, 1], [0, 0, 0], 0, 0);
+    addMesh(new THREE.PlaneGeometry(2,  2), [0, 1.7, 0], [-Math.PI / 2, 0, 0], [1, 1, 1], [1, 1, 1], 10, 0);
+    addMesh(new THREE.BoxGeometry(3.8, 0.2, 4), [0, -2, 0], [0, 0, 0], [0, 1, 0], [0, 0, 0], 0, 0);
+    addMesh(new THREE.BoxGeometry(0.2, 4.2, 4), [-2, 0, 0], [0, 0, 0], [1, 0, 0], [0, 0, 0], 0, 0);
+    addMesh(new THREE.BoxGeometry(4.2, 4.2, 0.2), [0, 0, -2.1], [0, 0, 0], [0.1, 0.1, 0.1], [0, 0, 0], 0, 0);
+    addMesh(new THREE.BoxGeometry(0.2, 4.2, 4), [2, 0, 0], [0, 0, 0], [0, 0, 1], [0, 0, 0], 0, 0);
 
     addGui();
 

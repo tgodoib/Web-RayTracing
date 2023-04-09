@@ -67,7 +67,7 @@
     uniform Sphere sphereList[16];
     uniform int sphereNumber;
 
-    uniform Triangle triangleList[64];
+    uniform Triangle triangleList[90];
     uniform int triangleNumber;
 
     uniform int MaxBouceCount;
@@ -228,7 +228,7 @@
 
             } else {
 //                incomingLight += vec4(GetEnvironmentLight(ray), 1.0) * rayColor * 0.8;
-//                incomingLight += vec4(0.1, 0.1, 0.1, 1.0) * rayColor;
+//                incomingLight += vec4(0.1, 0.1, 0.15, 1.0) * rayColor;
                 break;
             }
         }
@@ -255,7 +255,7 @@
             finalColor += Trace(ray, state);
         }
 
-        finalColor = finalColor / (max / 2.0);
+        finalColor = finalColor / max;
         finalColor = vec4(finalColor.xyz, 1.0);
 
         vec4 lastColor = texture2D(LastFrame, gl_FragCoord.xy / canvasSize.xy);
@@ -267,9 +267,6 @@
         } else {
             fragColor = vec4(finalColor.xyz, 1.0);
         }
-
-//        float weight = 1.0 / (NumRenderedFrames + 1.0);
-//        finalColor = lastColor * (1.0 - weight) + finalColor * weight;
 
         fragColor = vec4(finalColor.xyz, 1.0);
     }
